@@ -3,7 +3,7 @@
 只负责把 ``image`` 规范化、裁剪 ``rect``、可选二值化，然后调用 RapidOCR，
 把结果整理为 ascript 风格的 ``OcrText`` 对象。所有坐标都还原到全图。
 
-本库不截图；``image`` 必传，支持 ndarray / 图片路径 / Pillow Image / 无参函数。
+``image`` 支持 ndarray / 图片路径 / Pillow Image / 无参函数，省略时用全局截图回调。
 
 RapidOCR 是可选依赖：``pip install "imgcolor[ocr]"``
 （等价于 ``pip install rapidocr onnxruntime``）。未安装时给出明确提示。

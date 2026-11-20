@@ -1,6 +1,4 @@
-"""点阵字库识别 —— 对应 ascript ``OcrX`` / ``Ocr.matrix``。
-
-参考: https://www.ascript.cn/docs/android/api/screen/ocrx/
+"""点阵字库识别 —— 方法命名对齐 ascript ``OcrX`` / ``Ocr.matrix``。
 
 适用于游戏数字、定制字体等固定像素字体的小范围精确识别。
 识别用 ``cv2.matchTemplate`` 做二值点阵的 XOR 匹配，速度远快于逐像素滑窗。
@@ -55,7 +53,7 @@ class OcrX:
         :param font_lib: JSON 字库路径，或 :class:`FontLib` 实例
         :param rect: 识别范围 ``[x, y, x1, y1]``，None=整图
         :param region: 识别精度 0-1，默认 0.9（点阵匹配率）
-        :param image: BGR ndarray（本库不截图，必传）
+        :param image: 图片（ndarray / 路径 / Pillow / 无参函数），省略时用全局截图回调
         :param detail: True 时返回 ``list[dict]``（含 text/x/y/width/height/score）
         :param scales: 模板缩放比例列表，如 ``(0.9, 1.0, 1.1)`` 适配字号微差
         :param color: 覆盖字库前景色；不传则用字库 color，再没有则 Otsu 自动二值化
@@ -170,14 +168,14 @@ class Ocr:
     ``find`` / ``find_all`` / ``exists`` / ``click`` / ``wait`` / ``wait_click``
     底层统一使用 RapidOCR；``matrix`` 为点阵字库识别（无需 RapidOCR）。
 
-    本库不做截图、不做设备点击：
+    本库不做截图、不做设备点击，二者均通过回调注入：
 
-    - 图片通过 ``image=`` 传入（ndarray / 路径 / Pillow Image / 取图函数）；
-      也可全局注册 ``imgcolor.set_screencapper(fn)`` 后省略 ``image=`` 自动取图
+    - 图片可用 ``image=`` 传入（ndarray / 路径 / Pillow Image / 取图函数）；
+      或全局注册 ``imgcolor.set_screencapper(fn)`` 后省略 ``image=`` 自动取图
     - ``click`` / ``wait_click`` 需要先 ``Ocr.set_clicker(fn)``，
       或直接传 ``clicker=lambda x, y: ...``；回调收到文字中心坐标
-    - ``timeout > 0`` 且 ``image`` 传「返回新图的函数」时才会真正轮询刷新；
-      静态图片只识别一次
+    - ``timeout > 0`` 且 ``image`` 传取图函数、或省略 ``image`` 且已注册截图回调时
+      才会真正轮询刷新；静态图片只识别一次
     """
 
     MODE_RAPIDOCR = "rapidocr"
@@ -279,8 +277,8 @@ class Ocr:
              image: ImageLike = None, color_order: str = "BGR") -> Optional[Dict[str, Any]]:
         """等待文字出现（``timeout`` 单位为秒），超时返回 None。
 
-        只有 ``image`` 传「返回新图的函数」时才会在超时前反复取图；
-        静态 ndarray / 路径只识别一次。
+        ``image`` 传取图函数、或省略 ``image`` 且已注册截图回调时，才会在超时前
+        反复取图刷新；静态 ndarray / 路径只识别一次。
         """
         return Ocr._wait_hit(text, timeout, rect, mode, binary, confidence, image, color_order)
 

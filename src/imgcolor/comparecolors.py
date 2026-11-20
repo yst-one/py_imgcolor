@@ -1,6 +1,4 @@
-"""多点比色 —— 对应 ascript ``CompareColors``。
-
-参考: https://www.ascript.cn/docs/android/api/screen/comparecolors/
+"""多点比色 —— 方法命名对齐 ascript ``CompareColors``。
 
 与"找色"的区别：比色校验的是**固定绝对坐标**上的颜色，不搜索位置。
 """

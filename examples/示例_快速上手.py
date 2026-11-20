@@ -4,14 +4,12 @@
 运行：
     uv run python examples/示例_快速上手.py
 
-实际业务里把 ``img`` 换成你的截图 ndarray 即可，例如：
-    import cv2
-    img = cv2.imread("screen.png")                       # BGR
-    # 或 uiautomator2：
-    # from PIL import Image
-    # import io, numpy as np
-    # pil = d.screenshot()
-    # img = cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
+实际业务里把 ``img`` 换成你的截图即可，最简单的方式是注册一次全局截图回调：
+    import uiautomator2 as u2
+    import imgcolor
+    d = u2.connect()
+    imgcolor.set_screencapper(lambda: d.screenshot())  # 之后所有方法省略 image=
+之后 FindColors.find_color("#FF0000") 之类的调用都不用再传 image。
 """
 
 import tempfile
@@ -149,7 +147,7 @@ def main():
         pil = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
         print("  Pillow 输入   ->", FindImages.find(tpl, image=pil, confidence=0.9))
     except ImportError:
-        print("  （未安装 Pillow，跳过 PIL 演示；库本身不依赖 Pillow）")
+        print("  （缺少 Pillow，跳过 PIL 演示；pip install pillow）")
 
     # ---- 8. 全局截图回调：注册后所有方法省略 image -------------------- #
     # 真实业务里接 u2：import uiautomator2 as u2; d = u2.connect()

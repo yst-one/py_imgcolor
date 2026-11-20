@@ -1,6 +1,4 @@
-"""找图（模板匹配）—— 对应 ascript ``FindImages``。
-
-参考: https://www.ascript.cn/docs/android/api/screen/findimages/
+"""找图（模板匹配）—— 方法命名对齐 ascript ``FindImages``。
 
 返回 ascript 格式的 dict（单个）或 dict 数组（多个）::
 

@@ -1,7 +1,4 @@
-"""颜色数量 —— 对应 ascript ``Colors``。
-
-参考: https://www.ascript.cn/docs/android/api/screen/colors/
-"""
+"""颜色数量 —— 方法命名对齐 ascript ``Colors``。"""
 
 from __future__ import annotations
 

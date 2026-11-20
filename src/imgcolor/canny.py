@@ -1,6 +1,4 @@
-"""边缘检测 —— 对应 ascript ``screen.gp_tasks.Canny``。
-
-参考: https://www.ascript.cn/docs/android/api/screen/canny/
+"""边缘检测 —— 方法命名对齐 ascript ``screen.gp_tasks.Canny``。
 
 ascript 里 Canny 是 GPStack 的插件；这里做成可直接调用的类/函数，
 ``.run(image)`` 返回 ``CannyResult(image, data, contours, edges)``。

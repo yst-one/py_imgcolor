@@ -1,6 +1,4 @@
-"""多点找色 / 单点找色 —— 对应 ascript ``FindColors``。
-
-参考: https://www.ascript.cn/docs/android/api/screen/findcolors/
+"""多点找色 / 单点找色 —— 方法命名对齐 ascript ``FindColors``。
 
 特征串格式（图色助手生成）::
 
@@ -54,7 +52,7 @@ class FindColors:
         :param space: 结果间距，默认 5 像素（``find`` 只取一个，实际不影响结果）
         :param ori: 找色方向 1-8，默认 2（左上→右下，横向优先）
         :param diff: 颜色相似度 0-1，默认 0.98
-        :param image: BGR ndarray（本库不截图，必传）；也可传返回 ndarray 的函数配合 until
+        :param image: 图片（ndarray / 路径 / Pillow / 无参函数），省略时用全局截图回调；传函数可配合 until 轮询
         :param mode: 0=RGB, 1=Norm（归一化颜色，抗亮度变化）
         :param until: 超时毫秒数，0=不重试；>0 且 image 为函数时持续重试
         :return: :class:`Point` 或 None

@@ -11,7 +11,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from imgcolor import Ocr, configure_engine
+from imgcolor import Ocr
 
 
 def make_screen():
@@ -25,7 +25,6 @@ def make_screen():
 
 
 def main():
-    configure_engine()  # 可选：调整 RapidOCR 参数后重建引擎
     img = make_screen()
 
     print("① find      ->", Ocr.find("登录", confidence=0.5, image=img))
