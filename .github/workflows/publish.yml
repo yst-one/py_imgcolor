@@ -1,0 +1,35 @@
+name: build_whl_update
+
+on:
+  # 允许在 GitHub 网页上手动触发
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  my_job:
+    name: build_whl_update
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: 签出代码
+        uses: actions/checkout@v6
+
+      - name: 设置 UV 环境
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: 编译生成 WHL 包
+        run: uv build
+
+      - name: 保存编译产物
+        uses: actions/upload-artifact@v6
+        with:
+          name: imgcolor-whl-packages
+          path: dist/
+
+      - name: 发布到 PyPI
+        run: |
+          uv publish --token ${{ secrets.PYPI_API_TOKEN }}
