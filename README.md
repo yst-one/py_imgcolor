@@ -1,11 +1,11 @@
 # imgcolor
 
-基于 OpenCV 的 Python 图色库，对齐 [ascript 图色 API](https://www.ascript.cn/docs/android/api/screen/findcolors/) 的使用习惯：**多点找色 / 单点找色 / 多点比色 / 颜色数量 / 找图 / 边缘检测 / 文字识别**。
+基于 OpenCV 的 Python 图色库，对齐 ascript 图色方法命名：**多点找色 / 单点找色 / 多点比色 / 颜色数量 / 找图 / 边缘检测 / 文字识别**。
 
 本库只做**纯图像处理**——不截图、不点击设备。图片由调用方通过 `image=` 传入，输出坐标可直接喂给 uiautomator2 等自动化框架。
 
 - Python ≥ 3.9，MIT 协议
-- 版本：`0.5.0`
+- 版本：`0.5.1`
 - 仓库：https://github.com/yst-one/py_imgcolor
 - PyPI：https://pypi.org/project/imgcolor/
 
@@ -232,8 +232,3 @@ text  = Ocr.matrix("font.json", image=img)      # "12"
 | `until`/`timeout` 不等待 | `image` 传的是静态图；要重试必须传返回新图的函数 |
 | 中文路径读图失败 | 本库内部用 `np.fromfile + imdecode`，已支持；若自己用 `cv2.imread` 需同样处理 |
 | 首次 OCR 慢 | 首次识别下载模型；之后有缓存 |
-
-## 参考文档
-
-- [多点找色](https://www.ascript.cn/docs/android/api/screen/findcolors/) · [多点比色](https://www.ascript.cn/docs/android/api/screen/comparecolors/) · [颜色数量](https://www.ascript.cn/docs/android/api/screen/colors/)
-- [边缘检测](https://www.ascript.cn/docs/android/api/screen/canny/) · [找图](https://www.ascript.cn/docs/android/api/screen/findimages/) · [点阵字库](https://www.ascript.cn/docs/android/api/screen/ocrx/) · [OCR 便捷方法](https://www.ascript.cn/docs/android/api/screen/ocr/)

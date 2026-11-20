@@ -44,7 +44,7 @@ from .fontlib import FontLib, Glyph, binarize, make_font_lib
 from .ocrx import Ocr, OcrX, OcrText
 from .rapidocr_engine import configure_engine
 
-__version__ = "0.5.0"
+__version__ = "0.5.1"
 
 __all__ = [
     "FindColors",
