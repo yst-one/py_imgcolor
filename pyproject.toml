@@ -1,0 +1,41 @@
+[project]
+name = "imgcolor"
+version = "0.5.0"
+description = "基于 OpenCV 的 Python 图色库：多点找色、找图、边缘检测、点阵字库、RapidOCR 文字识别便捷方法（支持图片路径与 Pillow Image）"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "岳士太" }]
+keywords = ["opencv", "图色", "找色", "比色", "点阵字库", "uiautomator2"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "numpy>=1.24",
+    "opencv-python>=4.8",
+    "Pillow>=10.0",
+]
+
+[project.optional-dependencies]
+# Pillow 已是正式运行依赖（见 dependencies），测试只需 pytest
+test = ["pytest>=8.0"]
+# OCR 便捷方法（Ocr.find/find_all/exists/click/wait/wait_click）需要 RapidOCR。
+# 限定 <3.10：3.10+ 依赖 opencv-python-headless，与本库的 opencv-python 冲突。
+ocr = ["rapidocr>=3.9,<3.10", "onnxruntime>=1.16"]
+
+[project.urls]
+Homepage = "https://www.ascript.cn/docs/android/api/screen/findcolors/"
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/imgcolor"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/imgcolor", "tests", "examples", "pyproject.toml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

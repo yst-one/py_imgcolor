@@ -1,0 +1,28 @@
+# Python 缓存与编译产物
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# 构建产物（whl/sdist 由 CI 产出，不入库）
+dist/
+build/
+*.whl
+*.tar.gz
+
+# 编辑器与系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log
