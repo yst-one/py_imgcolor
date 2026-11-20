@@ -47,17 +47,19 @@ jobs:
           python3 - <<'PY'
           import os
           t = os.environ["PYPI_TOKEN"]
-          print("长度:", len(t))
-          print("前缀是否为 pypi- :", t.startswith("pypi-"))
-          print("首尾是否有空白 :", t != t.strip())
-          print("是否含引号     :", ("'" in t) or ('"' in t))
-          print("是否含换行     :", ("\n" in t) or ("\r" in t))
-          print("开头 8 字符    :", t[:8])
-          print("结尾 4 字符    :", t[-4:])
+          def notice(k, v):
+              print(f"::notice title=Token诊断::{k} = {v}")
+          notice("长度", len(t))
+          notice("前缀是否为pypi-", t.startswith("pypi-"))
+          notice("首尾有空白", t != t.strip())
+          notice("含引号", ("'" in t) or ('"' in t))
+          notice("含换行", ("\n" in t) or ("\r" in t))
+          notice("开头8字符", t[:8])
+          notice("结尾4字符", t[-4:])
           if not t.startswith("pypi-"):
-              print("::error::TOKEN 不是 pypi- 开头！PyPI API Token 必须以 pypi- 开头，请检查是否填成了 GitHub PAT 或账号密码")
+              print("::error::TOKEN 不是 pypi- 开头！请检查是否填成了 GitHub PAT 或账号密码")
           if t != t.strip() or ('"' in t) or ("'" in t):
-              print("::error::TOKEN 含多余引号或空白，请在 GitHub Secret 里重新粘贴纯 token（不要带引号）")
+              print("::error::TOKEN 含多余引号或空白，请重新粘贴纯 token")
           PY
 
       - name: 发布到 PyPI
