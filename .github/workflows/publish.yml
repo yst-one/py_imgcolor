@@ -30,38 +30,6 @@ jobs:
           name: imgcolor-whl-packages
           path: dist/
 
-      - name: 检查 PyPI Token 已配置
-        env:
-          PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
-        run: |
-          if [ -z "$PYPI_TOKEN" ]; then
-            echo "::error::仓库未配置 Secret PYPI_API_TOKEN，请到 Settings → Secrets and variables → Actions 添加"
-            exit 1
-          fi
-          echo "PYPI_API_TOKEN 已配置"
-
-      - name: 诊断 PyPI Token 格式（脱敏，不打印明文）
-        env:
-          PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
-        run: |
-          python3 - <<'PY'
-          import os
-          t = os.environ["PYPI_TOKEN"]
-          def notice(k, v):
-              print(f"::notice title=Token诊断::{k} = {v}")
-          notice("长度", len(t))
-          notice("前缀是否为pypi-", t.startswith("pypi-"))
-          notice("首尾有空白", t != t.strip())
-          notice("含引号", ("'" in t) or ('"' in t))
-          notice("含换行", ("\n" in t) or ("\r" in t))
-          notice("开头8字符", t[:8])
-          notice("结尾4字符", t[-4:])
-          if not t.startswith("pypi-"):
-              print("::error::TOKEN 不是 pypi- 开头！请检查是否填成了 GitHub PAT 或账号密码")
-          if t != t.strip() or ('"' in t) or ("'" in t):
-              print("::error::TOKEN 含多余引号或空白，请重新粘贴纯 token")
-          PY
-
       - name: 发布到 PyPI
         env:
           PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
