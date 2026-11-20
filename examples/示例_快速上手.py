@@ -151,6 +151,16 @@ def main():
     except ImportError:
         print("  （未安装 Pillow，跳过 PIL 演示；库本身不依赖 Pillow）")
 
+    # ---- 8. 全局截图回调：注册后所有方法省略 image -------------------- #
+    # 真实业务里接 u2：import uiautomator2 as u2; d = u2.connect()
+    #                 set_screencapper(lambda: d.screenshot())  # 返回 Pillow RGB
+    from imgcolor import clear_screencapper, set_screencapper
+
+    set_screencapper(lambda: img)  # 这里用合成图模拟"每次截图"
+    print("⑧ 省略 image  ->", FindColors.find_color("#FF0000"))
+    print("  count 省略   ->", Colors.count("#05D395", rect=[300, 50, 320, 70]))
+    clear_screencapper()  # 用完清除（显式 image= 时优先用显式图，不受影响）
+
 
 if __name__ == "__main__":
     main()

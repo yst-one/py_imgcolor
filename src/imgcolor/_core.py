@@ -12,7 +12,9 @@
   Pillow 是本库的正式运行依赖，安装 whl 时会自动带上
 - 返回上述任意类型的无参函数（配合 ``until>0`` 重试）
 
-本库不提供截图能力，图像一律由调用方通过 ``image=`` / ``bitmap=`` 传入。
+图像默认由调用方通过 ``image=`` / ``bitmap=`` 传入；也可全局注册一个截图回调
+（``set_screencapper(lambda: d.screenshot())``），此后所有方法省略 ``image=`` 时
+会自动取图。本库本身不含任何设备/屏幕截图实现。
 """
 
 from __future__ import annotations
@@ -30,6 +32,44 @@ from PIL import Image
 
 # Pillow 为正式依赖，直接用类型联合，不再靠鸭子类型猜测
 ImageLike = Union[np.ndarray, str, os.PathLike, Image.Image, Callable[[], Any]]
+
+
+# --------------------------------------------------------------------------- #
+# 全局截图回调
+# --------------------------------------------------------------------------- #
+_screencapper: Optional[Callable[[], Any]] = None
+
+
+def set_screencapper(capper: Optional[Callable[[], Any]]) -> None:
+    """注册全局截图回调 ``fn()``，返回值可以是 ndarray / 路径 / Pillow Image。
+
+    注册后，所有图色方法的 ``image=`` 都可以省略，库会自动调用 ``fn()`` 取图；
+    传 ``None`` 可清除。回调在每次需要取图时都被调用，因此配合 ``until`` / ``timeout``
+    能真正轮询刷新画面（典型用法：``set_screencapper(lambda: d.screenshot())``）。
+    """
+    global _screencapper
+    if capper is not None and not callable(capper):
+        raise TypeError("screencapper 必须是无参可调用对象 fn()")
+    _screencapper = capper
+
+
+def get_screencapper() -> Optional[Callable[[], Any]]:
+    """返回当前全局截图回调，未注册时为 None。"""
+    return _screencapper
+
+
+def clear_screencapper() -> None:
+    """清除全局截图回调（等价于 ``set_screencapper(None)``）。"""
+    global _screencapper
+    _screencapper = None
+
+
+def _grab_screen() -> Optional[np.ndarray]:
+    """若已注册截图回调则取一帧并规范化，否则返回 None。"""
+    capper = _screencapper
+    if capper is None:
+        return None
+    return as_image(capper(), "BGR")
 
 
 # --------------------------------------------------------------------------- #
@@ -227,10 +267,14 @@ def as_image(image: ImageLike, color_order: str = "BGR") -> np.ndarray:
     ``color_order="RGB"`` 只对**原始 ndarray** 生效；路径/Pillow 已自动规范化为 BGR。
     """
     if image is None:
-        raise ValueError(
-            "imgcolor 不提供截图功能：请通过 image= 传入 numpy 图像、图片路径或 Pillow Image。"
-            "RGB ndarray 可用 imgcolor.from_rgb(arr) 转换。"
-        )
+        if _screencapper is None:
+            raise ValueError(
+                "未提供图像且本库不提供截图功能：请通过 image= 传入 numpy 图像、"
+                "图片路径或 Pillow Image，或先调用 imgcolor.set_screencapper(fn) "
+                "注册全局截图回调。RGB ndarray 可用 imgcolor.from_rgb(arr) 转换。"
+            )
+        # 有全局截图器：取一帧。回调已由 _grab_screen 规范化，不再二次反转通道
+        return _grab_screen()  # type: ignore[return-value]
 
     arr, normalized = read_image(image)
     rgb_input = (not normalized) and str(color_order).upper() == "RGB"
@@ -387,14 +431,15 @@ def nms(points: Sequence[Tuple[int, int]], space: int) -> List[Tuple[int, int]]:
 
 def run_until(image: ImageLike, until: Union[int, float], action: Callable[[np.ndarray], Any],
               color_order: str = "BGR", done: Optional[Callable[[Any], bool]] = None) -> Any:
-    """``until>0`` 且 ``image`` 为可调用对象时，在超时前反复取图重试。
+    """``until>0`` 且可刷新画面时，在超时前反复取图重试。
 
-    image 是静态 ndarray 时只执行一次（无截图能力，无法刷新画面）。
+    满足以下任一条件即视为"可刷新"：``image`` 是可调用对象，或 ``image`` 为 None
+    且已注册全局截图回调（此时每轮自动取新帧）。静态 ndarray/路径只执行一次。
     ``done`` 自定义"结果算成功"的判定（默认 truthy），供返回 0/-1 这类
     索引值的方法使用。
     """
     is_done = done if done is not None else (lambda r: bool(r))
-    retryable = callable(image)
+    retryable = callable(image) or (image is None and _screencapper is not None)
     timeout = max(0.0, float(until or 0)) / 1000.0
     deadline = time.monotonic() + timeout if (timeout and retryable) else 0.0
     while True:

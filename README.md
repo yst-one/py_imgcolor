@@ -5,7 +5,7 @@
 本库只做**纯图像处理**——不截图、不点击设备。图片由调用方通过 `image=` 传入，输出坐标可直接喂给 uiautomator2 等自动化框架。
 
 - Python ≥ 3.9，MIT 协议
-- 版本：`0.5.1`
+- 版本：`0.5.2`
 - 仓库：https://github.com/yst-one/py_imgcolor
 - PyPI：https://pypi.org/project/imgcolor/
 
@@ -41,9 +41,25 @@ uv run pytest -q
 
 **2. 颜色是 RGB、图像是 BGR。** 颜色串一律写 `#RRGGBB`，与 OpenCV 的 BGR 内存顺序相反，库内部自动转换。若你手上是 RGB ndarray（PIL / mss / uiautomator2 截图），用 `imgcolor.from_rgb(arr)` 转换，或给方法传 `color_order="RGB"`。路径和 Pillow 输入已自动规范化，无需该参数。
 
-**3. `until` / `timeout` 的重试只在 `image` 传函数时生效。** 传静态 ndarray / 路径时只算一次，不会阻塞等待。
+**3. 全局截图回调（省去每次传图）。** 注册一次后，所有方法的 `image=` 都可以省略，库会自动取图：
 
-**4. `rect` 一律是 `[x, y, x1, y1]`**（左上、右下，右/下边界不含），`None` 表示全图。
+```python
+import uiautomator2 as u2
+import imgcolor
+
+d = u2.connect()
+imgcolor.set_screencapper(lambda: d.screenshot())  # u2 返回 Pillow RGB，自动转 BGR
+
+# 此后所有方法都不用传 image
+p = FindColors.find_color("#FF0000")
+Ocr.click("登录")          # 配合 Ocr.set_clicker(lambda x, y: d.click(x, y))
+```
+
+回调可返回 ndarray / 路径 / Pillow Image；`get_screencapper()` 查看，`clear_screencapper()` 清除。显式传 `image=` 时优先用显式图，不调用回调。
+
+**4. `until` / `timeout` 的重试在「`image` 传函数」或「已注册截图回调且省略 `image`」时生效**——每轮重新取图，能真正刷新画面。传静态 ndarray / 路径时只算一次，不会阻塞等待。
+
+**5. `rect` 一律是 `[x, y, x1, y1]`**（左上、右下，右/下边界不含），`None` 表示全图。
 
 ## 快速上手
 
@@ -229,6 +245,6 @@ text  = Ocr.matrix("font.json", image=img)      # "12"
 | 找图分数很低 | 模板与截图不同源；从目标截图同源裁切，或降低 `confidence` / 用 `scale_range` |
 | Pillow `P`/`1` 模式比色不准 | 调色板量化色损，先 `convert("RGB")` |
 | `click` 报未配置回调 | 先 `Ocr.set_clicker(fn)` 或传 `clicker=` |
-| `until`/`timeout` 不等待 | `image` 传的是静态图；要重试必须传返回新图的函数 |
+| `until`/`timeout` 不等待 | `image` 传的是静态图；要重试须传返回新图的函数，或注册全局截图回调后省略 `image` |
 | 中文路径读图失败 | 本库内部用 `np.fromfile + imdecode`，已支持；若自己用 `cv2.imread` 需同样处理 |
 | 首次 OCR 慢 | 首次识别下载模型；之后有缓存 |

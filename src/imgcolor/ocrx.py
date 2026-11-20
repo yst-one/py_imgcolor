@@ -15,11 +15,22 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Union
 import cv2
 import numpy as np
 
-from ._core import ImageLike, as_image, crop
+from ._core import ImageLike, as_image, crop, get_screencapper
 from .fontlib import FontLib, binarize
 from .rapidocr_engine import OcrText, recognize
 
 FontLibLike = Union[str, "FontLib"]
+
+
+def _get_frame(image: ImageLike) -> ImageLike:
+    """取一帧：callable 调之；None 时用全局截图回调；其余原样返回。"""
+    if callable(image):
+        return image()
+    if image is None:
+        capper = get_screencapper()
+        if capper is not None:
+            return capper()
+    return image
 
 
 class OcrX:
@@ -161,7 +172,8 @@ class Ocr:
 
     本库不做截图、不做设备点击：
 
-    - 所有方法都必须通过 ``image=`` 传入图片（ndarray / 路径 / Pillow Image）
+    - 图片通过 ``image=`` 传入（ndarray / 路径 / Pillow Image / 取图函数）；
+      也可全局注册 ``imgcolor.set_screencapper(fn)`` 后省略 ``image=`` 自动取图
     - ``click`` / ``wait_click`` 需要先 ``Ocr.set_clicker(fn)``，
       或直接传 ``clicker=lambda x, y: ...``；回调收到文字中心坐标
     - ``timeout > 0`` 且 ``image`` 传「返回新图的函数」时才会真正轮询刷新；
@@ -200,7 +212,7 @@ class Ocr:
              binary: int = -1, confidence: float = 0.1, image: ImageLike = None,
              color_order: str = "BGR") -> Optional[Dict[str, Any]]:
         """查找文字，返回第一个匹配结果 dict；未找到返回 None。``text`` 支持正则。"""
-        src = image() if callable(image) else image
+        src = _get_frame(image)
         hits = Ocr._recognize(src, rect, mode, binary, confidence, text, color_order)
         return hits[0].as_dict() if hits else None
 
@@ -210,7 +222,7 @@ class Ocr:
                  image: ImageLike = None,
                  color_order: str = "BGR") -> Optional[List[Dict[str, Any]]]:
         """返回所有匹配结果；``text=None`` 返回全部文字。无结果返回 None。"""
-        src = image() if callable(image) else image
+        src = _get_frame(image)
         hits = Ocr._recognize(src, rect, mode, binary, confidence, text, color_order)
         return [h.as_dict() for h in hits] if hits else None
 
@@ -227,9 +239,9 @@ class Ocr:
                   binary: int, confidence: float, image: ImageLike,
                   color_order: str) -> Optional[Dict[str, Any]]:
         deadline = time.monotonic() + max(0.0, float(timeout))
-        retryable = callable(image)
+        retryable = callable(image) or (image is None and get_screencapper() is not None)
         while True:
-            src = image() if retryable else image
+            src = _get_frame(image)
             hits = Ocr._recognize(src, rect, mode, binary, confidence, text, color_order)
             if hits:
                 return hits[0].as_dict()
