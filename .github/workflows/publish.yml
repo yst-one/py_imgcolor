@@ -30,6 +30,18 @@ jobs:
           name: imgcolor-whl-packages
           path: dist/
 
-      - name: 发布到 PyPI
+      - name: 检查 PyPI Token 已配置
+        env:
+          PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
         run: |
-          uv publish --token ${{ secrets.PYPI_API_TOKEN }}
+          if [ -z "$PYPI_TOKEN" ]; then
+            echo "::error::仓库未配置 Secret PYPI_API_TOKEN，请到 Settings → Secrets and variables → Actions 添加"
+            exit 1
+          fi
+          echo "PYPI_API_TOKEN 已配置"
+
+      - name: 发布到 PyPI
+        env:
+          PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          uv publish --token "$PYPI_TOKEN"
