@@ -8,7 +8,8 @@
 支持：透明 PNG（alpha 作 mask）、一次找多张图、``scale_range`` 多尺度、
 灰度/彩色匹配、``ori`` 排序方向、``rect`` 缩小搜索区。
 
-``find_sift`` / ``find_all_sift`` 按官方文档说明降级为模板匹配。
+``find_sift`` / ``find_all_sift`` 是真正的 SIFT 特征匹配（尺度/旋转不变，
+用 RANSAC 单应矩阵定位）；当图像特征不足或 SIFT 不可用时自动回退模板匹配。
 """
 
 from __future__ import annotations
@@ -148,6 +149,167 @@ def _match_one(search: np.ndarray, templ: np.ndarray, mask: Optional[np.ndarray]
 
 
 # --------------------------------------------------------------------------- #
+# SIFT 特征匹配（尺度/旋转不变）
+# --------------------------------------------------------------------------- #
+_sift_instance = None
+_sift_unavailable = False
+
+
+def _get_sift():
+    """惰性创建 SIFT 实例；OpenCV 压缩版无 SIFT 时返回 None（只探测一次）。"""
+    global _sift_instance, _sift_unavailable
+    if _sift_unavailable:
+        return None
+    if _sift_instance is None:
+        factory = getattr(cv2, "SIFT_create", None)
+        if factory is None:
+            _sift_unavailable = True
+            return None
+        try:
+            _sift_instance = factory()
+        except Exception:
+            _sift_unavailable = True
+            return None
+    return _sift_instance
+
+
+def _to_gray(img: np.ndarray) -> np.ndarray:
+    if img.ndim == 3:
+        return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    return img
+
+
+def _sift_match_one(
+    sift, search_gray: np.ndarray, templ_gray: np.ndarray, threshold: float,
+    maxcnt: int, ratio: float = 0.75, reproj: float = 5.0,
+) -> List[Dict[str, Any]]:
+    """单模板 SIFT 匹配：BFMatcher + Lowe ratio test + 迭代 RANSAC 单应。
+
+    多个相同目标时，一次 RANSAC 会把不同目标的匹配点混在一起拟合出错误小框。
+    采用多模型拟合：每拟合出一个实例就移除其 inliers，用剩余匹配点继续找下一个，
+    直到不足 4 个或达到 ``maxcnt``。返回候选含 score/x/y/w/h/cx/cy。
+    """
+    kp1, des1 = sift.detectAndCompute(templ_gray, None)
+    kp2, des2 = sift.detectAndCompute(search_gray, None)
+    if des1 is None or des2 is None or len(kp1) < 4 or len(kp2) < 4:
+        return []
+
+    bf = cv2.BFMatcher(cv2.NORM_L2)
+    knn = bf.knnMatch(des1, des2, k=2)
+    good = [m for pair in knn if len(pair) == 2
+            for m, n in [pair] if m.distance < ratio * n.distance]
+    if len(good) < 4:
+        return []
+
+    src_all = np.float32([kp1[m.queryIdx].pt for m in good]).reshape(-1, 1, 2)
+    dst_all = np.float32([kp2[m.trainIdx].pt for m in good]).reshape(-1, 1, 2)
+    th, tw = templ_gray.shape[:2]
+    corners = np.float32([[0, 0], [tw, 0], [tw, th], [0, th]]).reshape(-1, 1, 2)
+    eps = float(np.clip(threshold, 0.0, 1.0))
+
+    out: List[Dict[str, Any]] = []
+    remaining = np.ones(len(good), dtype=bool)
+    for _ in range(5000):
+        if int(remaining.sum()) < 4 or (maxcnt and len(out) >= int(maxcnt)):
+            break
+        src = src_all[remaining]
+        dst = dst_all[remaining]
+        H, mask = cv2.findHomography(src, dst, cv2.RANSAC, reproj)
+        if H is None or mask is None:
+            break
+        inlier_idx = np.flatnonzero(mask.ravel().astype(bool))
+        inliers = len(inlier_idx)
+        if inliers < 4:
+            break
+
+        inlier_ratio = inliers / len(good)
+        strength = min(1.0, inliers / 8.0)
+        score = float(inlier_ratio * (0.5 + 0.5 * strength))
+
+        proj = cv2.perspectiveTransform(corners, H).reshape(-1, 2)
+        xs, ys = proj[:, 0], proj[:, 1]
+        x, y = float(xs.min()), float(ys.min())
+        w, h = float(xs.max() - x), float(ys.max() - y)
+        # 尺寸合理性：SIFT 尺度变化时框应接近模板等比，允许较大范围但拒绝退化
+        if w > 0 and h > 0 and 0.25 <= (w / tw) <= 4.0 and h / w > 0.2:
+            if score >= eps:
+                out.append({"score": score, "x": x, "y": y, "w": w, "h": h,
+                            "scale": 0, "cx": x + w / 2.0, "cy": y + h / 2.0})
+
+        # 移除本轮 inliers，避免下一轮重复拟合同一目标
+        removal = np.flatnonzero(remaining)
+        remaining[removal[inlier_idx]] = False
+    return out
+
+
+def _search_sift(
+    part_img: Union[TemplateLike, Sequence[TemplateLike]],
+    rect: Optional[Sequence[int]], confidence: float, source_img: ImageLike,
+    maxcnt: int, ori: int, image: ImageLike, color_order: str,
+) -> Optional[List[Dict[str, Any]]]:
+    """SIFT 匹配主流程。返回 None 表示不可用（调用方应降级），[] 表示特征够但未命中。"""
+    sift = _get_sift()
+    if sift is None:
+        return None
+    src = image if image is not None else source_img
+    img = as_image(src, color_order)
+    sub, off_x, off_y = crop(img, rect)
+    if sub.size == 0:
+        return []
+    search_gray = _to_gray(sub)
+
+    templates = list(part_img) if isinstance(part_img, (list, tuple)) else [part_img]
+    if not templates:
+        raise ValueError("part_img 不能为空")
+
+    candidates: List[Dict[str, Any]] = []
+    any_features = False
+    for index, tpl_src in enumerate(templates):
+        templ, _mask = _prepare_template(tpl_src, rgb=False, color_order=color_order)
+        templ_gray = _to_gray(templ)
+        # 探测是否有足够特征：无任何模板有 >=4 关键点时视为 SIFT 不可用
+        kp_probe = sift.detectAndCompute(templ_gray, None)[0]
+        if kp_probe is not None and len(kp_probe) >= 4:
+            any_features = True
+        for c in _sift_match_one(sift, search_gray, templ_gray, confidence, maxcnt):
+            c["index"] = index
+            candidates.append(c)
+
+    if not any_features:
+        return None
+
+    # 与模板匹配一致的重叠去重 + ori 排序
+    candidates.sort(key=lambda c: -c["score"])
+    kept: List[Dict[str, Any]] = []
+    for c in candidates:
+        if any(
+            abs(c["cx"] - k["cx"]) < max(c["w"], k["w"]) * 0.5
+            and abs(c["cy"] - k["cy"]) < max(c["h"], k["h"]) * 0.5
+            for k in kept
+        ):
+            continue
+        kept.append(c)
+        if maxcnt and len(kept) >= int(maxcnt):
+            break
+    order = sort_points([(int(k["x"]), int(k["y"])) for k in kept], ori)
+    lookup = {(int(k["x"]), int(k["y"])): k for k in kept}
+    ordered = [lookup[p] for p in order if p in lookup]
+
+    results: List[Dict[str, Any]] = []
+    for k in ordered:
+        gx, gy = int(k["x"] + off_x), int(k["y"] + off_y)
+        x1, y1 = int(gx + k["w"]), int(gy + k["h"])
+        results.append({
+            "rect": [gx, gy, x1, y1],
+            "center_x": int((gx + x1) // 2),
+            "center_y": int((gy + y1) // 2),
+            "confidence": round(float(k["score"]), 4),
+            "index": int(k["index"]),
+        })
+    return results
+
+
+# --------------------------------------------------------------------------- #
 # 主流程
 # --------------------------------------------------------------------------- #
 def _search(
@@ -282,22 +444,39 @@ class FindImages:
         return FindImages.find_all(part_img, rect, confidence, rgb, source_img,
                                    maxcnt, ori, scale_range, image, color_order)
 
-    # 官方文档：压缩版 OpenCV 无 SIFT，自动降级为模板匹配
     @staticmethod
     def find_sift(part_img, rect=None, confidence: float = 0.5, rgb: bool = False,
                   source_img=None, ori: int = 2, scale_range=None,
                   image=None, color_order: str = "BGR"):
-        """兼容入口：降级为模板匹配。跨分辨率请用 ``scale_range``。"""
-        return FindImages.find(part_img, rect, confidence, rgb, source_img, ori,
-                               scale_range, image, color_order)
+        """SIFT 特征匹配（单个），天然尺度/旋转不变，无需 ``scale_range``。
+
+        用 RANSAC 单应矩阵把模板四角投影到源图求外接矩形；返回 dict 格式与
+        :meth:`find` 相同。特征不足（如纯色块/简单图标）或 OpenCV 无 SIFT 时，
+        自动回退模板匹配（此时 ``scale_range`` 生效）。
+        """
+        res = _search_sift(part_img, rect, confidence, source_img, 0, ori,
+                           image, color_order)
+        # SIFT 不可用或没命中（简单图标常无特征可匹配）→ 回退模板匹配
+        if not res:
+            return FindImages.find(part_img, rect, confidence, rgb, source_img,
+                                   ori, scale_range, image, color_order)
+        best = max(r["confidence"] for r in res)
+        return next(r for r in res if r["confidence"] >= best)
 
     @staticmethod
     def find_all_sift(part_img, rect=None, confidence: float = 0.5, rgb: bool = False,
                       maxcnt: int = 0, source_img=None, ori: int = 2,
                       scale_range=None, image=None, color_order: str = "BGR"):
-        """兼容入口：降级为模板匹配。跨分辨率请用 ``scale_range``。"""
-        return FindImages.find_all(part_img, rect, confidence, rgb, source_img,
-                                   maxcnt, ori, scale_range, image, color_order)
+        """SIFT 特征匹配（全部），返回 dict 数组或 None；``maxcnt=0`` 不限数量。
+
+        特征不足时回退模板匹配，行为同 :meth:`find_sift`。
+        """
+        res = _search_sift(part_img, rect, confidence, source_img, maxcnt, ori,
+                           image, color_order)
+        if not res:
+            return FindImages.find_all(part_img, rect, confidence, rgb, source_img,
+                                       maxcnt, ori, scale_range, image, color_order)
+        return res
 
 
 __all__ = ["FindImages"]

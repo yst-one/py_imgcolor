@@ -6,7 +6,7 @@
 - 注册一次截图回调，之后所有方法都不用再传 `image`。
 - 只做图像处理，**不含设备截图与点击**（这两件事交给回调，库不绑定任何框架）。
 
-Python ≥ 3.9 · MIT · 版本 `0.5.3`
+Python ≥ 3.9 · MIT · 版本 `0.5.4`
 
 - 仓库：https://github.com/yst-one/py_imgcolor
 - PyPI：https://pypi.org/project/imgcolor/
@@ -144,13 +144,23 @@ hit = FindImages.find("btn.png", image=img, confidence=0.9)     # 找图 → dic
 | `find(...)` | 找单个，多图/多尺度时返回置信度最高者 |
 | `find_all(..., maxcnt=0)` | 找全部，`maxcnt=0` 不限数量 |
 | `find_template` / `find_all_template` | 同上别名，默认 `confidence=0.5` |
-| `find_sift` / `find_all_sift` | 兼容入口，降级为模板匹配 |
+| `find_sift` / `find_all_sift` | **真 SIFT 特征匹配**，尺度/旋转不变，无需 `scale_range` |
 
 公共参数：`(part_img, rect=None, confidence=0.1, rgb=False, image=None, ori=2, scale_range=None)`。
 
 - `part_img`：模板，可为 ndarray、路径、`Path`，或它们的列表（多图搜索，结果带 `index`）。
 - `confidence`：阈值。模板**必须从目标截图同源裁切**才能接近 1.0；跨来源素材分数偏低，需降低阈值。
 - `scale_range=[min, max]`：多尺度搜索（约 15 步长，含 1.0），用于跨分辨率。透明 PNG 的 alpha 会作为 mask。
+
+**SIFT 匹配（`find_sift` / `find_all_sift`）**：用 SIFT 特征 + RANSAC 单应矩阵定位，**天然尺度/旋转不变**——模板 50×50 匹配截图里 100×100 的目标不用传 `scale_range`：
+
+```python
+hit = FindImages.find_sift("icon.png", image=img)   # 缩放、旋转都能命中
+```
+
+- 适合纹理丰富的图（图标细节、商品图、场景）；`confidence` 是可信度（内点比例×数量加权），建议 0.3~0.5 起调。
+- **简单纯色块/几何图形**没有足够特征点，会自动回退模板匹配（此时 `scale_range` 生效），保证兼容。
+- 同一图案在图上出现多次且完全相同时 SIFT 难区分，也可能回退模板匹配；不同图案各自匹配则正常返回 `index`。
 
 返回 dict：`{"rect": [x,y,x1,y1], "center_x":.., "center_y":.., "confidence":.., "index":..}`。
 
